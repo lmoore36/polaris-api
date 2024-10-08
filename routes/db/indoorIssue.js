@@ -73,6 +73,8 @@ indoorIssueRoutes.route("/app/indoorIssue/add").post(upload.single('image'), asy
         const issueId = rows[0].issue_id;
 
         // inserts the image into a second table, connected to the issues table by ID
+            // IssueImages is not a real part of database, not sure if we want images in the same table or seperate
+        
         if (image) {
             const imageQueryText = "INSERT INTO IssueImages(issue_id, image) VALUES($1, $2)";
             await pool.query(imageQueryText, [issueId, image]);
