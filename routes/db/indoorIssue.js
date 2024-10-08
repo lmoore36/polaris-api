@@ -1,4 +1,6 @@
 const express = require("express");
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 // indoorIssueRoutes is an instance of the express router.
 // We use it to define our routes.
@@ -53,22 +55,37 @@ indoorIssueRoutes.get("/app/indoorIssue/:id", async (req, res, next) => {
 });
 
 // Create a new indoorIssue.
-indoorIssueRoutes.route("/app/indoorIssue/add").post(async (req, res, next) => {
+indoorIssueRoutes.route("/app/indoorIssue/add").post(upload.single('image'), async (req, res, next) => {
     const { avoidPolygon, location, latitude, longitude, description, status, datetimeOpen, datetimeClosed, datetimePermanent, votes } = req.body;
-
+    
+    // convert image buffer to base64 if image exists
+    const image = req.file ? req.file.buffer.toString('base64') : null; 
+    
     const queryText = `
         INSERT INTO Issue(avoidPolygon, location, latitude, longitude, description, status, datetimeOpen, datetimeClosed, datetimePermanent, votes)
         VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        RETURNING *;
+        RETURNING issue_id;
     `;
 
     try {
+        await pool.query('BEGIN');
         const { rows } = await pool.query(queryText, [avoidPolygon, location, latitude, longitude, description, status, datetimeOpen, datetimeClosed, datetimePermanent, votes || 0]);
+        const issueId = rows[0].issue_id;
+
+        // inserts the image into a second table, connected to the issues table by ID
+        if (image) {
+            const imageQueryText = "INSERT INTO IssueImages(issue_id, image) VALUES($1, $2)";
+            await pool.query(imageQueryText, [issueId, image]);
+        }
+
+        await pool.query('COMMIT');
+
         res.status(200).json({
             message: "Successfully added indoor issue",
             data: rows[0]
         });
     } catch (error) {
+        await pool.query('ROLLBACK');
         next(error);
     }
 });
